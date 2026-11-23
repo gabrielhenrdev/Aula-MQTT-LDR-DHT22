@@ -185,44 +185,169 @@
 #include <DHT_U.h>
 #include "internet.h"
 
-#define pindht 4
-#define tipodht DHT22
-#define pinoLDR 32
+// #define pindht 4
+// #define tipodht DHT22
+// #define pinoLDR 32
 
-DHT mao(pindht, tipodht);
+// DHT mao(pindht, tipodht);
+
+// const char *mqtt_server = "test.mosquitto.org";
+// const int mqtt_port = 1883;
+// const char *mqtt_client_id = "esp-gabrielh";
+
+// const char *mqtt_topic_pub = "PedraoArduino/sub";
+
+// WiFiClient espClient;
+// PubSubClient client(espClient);
+
+// unsigned long tempoAnterior = 0;
+// const unsigned long intervalo = 3000;
+
+// float temperatura;
+// float umidade;
+// int luminosidade;
+
+// bool novaLeitura = false;
+
+// void dht();
+// void conectaMqtt();
+
+// void setup()
+// {
+//     Serial.begin(115200);
+
+//     mao.begin();
+
+//     pinMode(pinoLDR, INPUT);
+
+//     conexaoWIFI();
+
+//     client.setServer(mqtt_server, mqtt_port);
+// }
+
+// void loop()
+// {
+//     reconexaoWIFI();
+
+//     if (!client.connected())
+//     {
+//         conectaMqtt();
+//     }
+
+//     client.loop();
+
+//     dht();
+
+//     if (novaLeitura)
+//     {
+
+//         JsonDocument doc;
+
+//         doc["disp"] = "ESP-GABRIELH";
+//         doc["temperatura"] = temperatura;
+//         doc["umidade"] = umidade;
+//         doc["luminosidade"] = luminosidade;
+
+//         String stringJson;
+
+//         serializeJson(doc, stringJson);
+
+//         if (client.publish(mqtt_topic_pub, stringJson.c_str()))
+//         {
+//             Serial.println("Dados enviados:");
+//             Serial.println(stringJson);
+//         }
+//         else
+//         {
+//             Serial.println("Erro ao publicar!");
+//         }
+
+//         novaLeitura = false;
+//     }
+// }
+
+// void dht()
+// {
+//     unsigned long tempoAtual = millis();
+
+//     if (tempoAtual - tempoAnterior >= intervalo)
+//     {
+//         tempoAnterior = tempoAtual;
+
+//         temperatura = mao.readTemperature();
+//         umidade = mao.readHumidity();
+
+//         luminosidade = analogRead(pinoLDR);
+
+//         if (isnan(temperatura) || isnan(umidade))
+//         {
+//             Serial.println("Erro ao ler DHT22!");
+//             novaLeitura = false;
+//             return;
+//         }
+
+//         novaLeitura = true;
+//     }
+// }
+
+// void conectaMqtt()
+// {
+//     while (!client.connected())
+//     {
+//         Serial.println("Conectando ao MQTT...");
+
+//         if (client.connect(mqtt_client_id))
+//         {
+//             Serial.println("Conectado ao MQTT!");
+//         }
+//         else
+//         {
+//             Serial.println("Erro ao conectar!");
+//             Serial.println(client.state());
+//             delay(5000);
+//         }
+//     }
+// }
+
+
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+#include "internet.h"
+#include <time.h>
+
+const int LED = 2;
 
 const char *mqtt_server = "test.mosquitto.org";
 const int mqtt_port = 1883;
 const char *mqtt_client_id = "esp-gabrielh";
+const char *mqtt_topic_sub = "PedraoArduino/pub";
 
-const char *mqtt_topic_pub = "PedraoArduino/sub";
+void conectaMqtt();
+void retornoMqtt(char *topic, byte *payload, unsigned int length);
+void piscarLED();
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+bool piscando = false;
+bool estadoLED = false;
+
 unsigned long tempoAnterior = 0;
-const unsigned long intervalo = 3000;
-
-float temperatura;
-float umidade;
-int luminosidade;
-
-bool novaLeitura = false;
-
-void dht();
-void conectaMqtt();
+const unsigned long intervalo = 500;
 
 void setup()
 {
     Serial.begin(115200);
 
-    mao.begin();
-
-    pinMode(pinoLDR, INPUT);
+    pinMode(LED, OUTPUT);
 
     conexaoWIFI();
 
     client.setServer(mqtt_server, mqtt_port);
+    client.setCallback(retornoMqtt);
 }
 
 void loop()
@@ -236,57 +361,9 @@ void loop()
 
     client.loop();
 
-    dht();
-
-    if (novaLeitura)
+    if (piscando)
     {
-
-        JsonDocument doc;
-
-        doc["disp"] = "ESP-GABRIELH";
-        doc["temperatura"] = temperatura;
-        doc["umidade"] = umidade;
-        doc["luminosidade"] = luminosidade;
-
-        String stringJson;
-
-        serializeJson(doc, stringJson);
-
-        if (client.publish(mqtt_topic_pub, stringJson.c_str()))
-        {
-            Serial.println("Dados enviados:");
-            Serial.println(stringJson);
-        }
-        else
-        {
-            Serial.println("Erro ao publicar!");
-        }
-
-        novaLeitura = false;
-    }
-}
-
-void dht()
-{
-    unsigned long tempoAtual = millis();
-
-    if (tempoAtual - tempoAnterior >= intervalo)
-    {
-        tempoAnterior = tempoAtual;
-
-        temperatura = mao.readTemperature();
-        umidade = mao.readHumidity();
-
-        luminosidade = analogRead(pinoLDR);
-
-        if (isnan(temperatura) || isnan(umidade))
-        {
-            Serial.println("Erro ao ler DHT22!");
-            novaLeitura = false;
-            return;
-        }
-
-        novaLeitura = true;
+        piscarLED();
     }
 }
 
@@ -298,13 +375,119 @@ void conectaMqtt()
 
         if (client.connect(mqtt_client_id))
         {
-            Serial.println("Conectado ao MQTT!");
+            Serial.println("Conectado com sucesso!");
+
+            client.subscribe(mqtt_topic_sub);
         }
         else
         {
             Serial.println("Erro ao conectar!");
             Serial.println(client.state());
+
             delay(5000);
         }
     }
 }
+
+void retornoMqtt(char *topic, byte *payload, unsigned int length)
+{
+    String msgRecebida = "";
+
+    for (int i = 0; i < length; i++)
+    {
+        msgRecebida += (char)payload[i];
+    }
+
+    Serial.println("Mensagem recebida:");
+    Serial.println(msgRecebida);
+
+    JsonDocument doc;
+
+    DeserializationError erro = deserializeJson(doc, msgRecebida);
+
+    if (erro)
+    {
+        Serial.println("Erro ao decodificar JSON!");
+        return;
+    }
+
+    const char *disp = doc["disp"];
+    const char *msg = doc["msg"];
+
+    if (msg == nullptr)
+    {
+        Serial.println("Comando inexistente!");
+        return;
+    }
+    Serial.println("-------------------------");
+
+    Serial.print("Dispositivo: ");
+    Serial.println(disp ? disp : "Desconhecido");
+
+    Serial.print("Mensagem: ");
+    Serial.println(msg);
+
+
+    if (String(msg) == "L")
+    {
+        piscando = false;
+        estadoLED = true;
+
+        digitalWrite(LED, HIGH);
+
+        Serial.println("LED ligado!");
+    }
+    else if (String(msg) == "D")
+    {
+        piscando = false;
+        estadoLED = false;
+
+        digitalWrite(LED, LOW);
+
+        Serial.println("LED desligado!");
+    }
+    else if (String(msg) == "P")
+    {
+        piscando = true;
+        estadoLED = false;
+
+        tempoAnterior = millis();
+
+        digitalWrite(LED, LOW);
+
+        Serial.println("LED piscando!");
+    }
+    else
+    {
+        Serial.println("Comando desconhecido!");
+    }
+
+    JsonDocument docResposta;
+
+    docResposta["disp"] = disp ? disp : "Desconhecido";
+    docResposta["msg"] = msg;
+
+    String jsonFinal;
+
+    serializeJson(docResposta, jsonFinal);
+
+    Serial.println("JSON processado:");
+    Serial.println(jsonFinal);
+
+    Serial.println("-------------------------");
+}
+
+void piscarLED()
+{
+    unsigned long tempoAtual = millis();
+
+    if (tempoAtual - tempoAnterior >= intervalo)
+    {
+        tempoAnterior = tempoAtual;
+
+        estadoLED = !estadoLED;
+
+        digitalWrite(LED, estadoLED);
+    }
+}
+
